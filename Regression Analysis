@@ -1,0 +1,316 @@
+#Load packages
+import numpy as np
+import pandas as pd
+import matplotlib as mp
+import matplotlib.pyplot as plt
+%matplotlib inline
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import ShuffleSplit
+from sklearn.kernel_ridge import KernelRidge
+import graphviz
+
+# load data set
+Shanghai = pd.read_csv("Shanghai.csv")
+
+#see the data types we're dealing with 
+#print(Shanghai.dtypes)
+
+#This is our target variable 
+y = Shanghai.iloc[:,1]
+yGuess=np.mean(y)
+# These are the predictors 
+X= Shanghai.iloc[:, 2:15]
+
+#create dummies for categorical variable 
+dummies = pd.get_dummies(X.iloc[:,9])
+#Join the dummies the predictors 
+X = X.join(dummies)
+
+#drop the categorical variable 
+X = X.drop(['cbwd'],1)
+
+#See the data 
+Shanghai.head(10)
+plt.title("Humidity and Precipitation effect on Particulate Matter")
+plt.scatter(Shanghai.iloc[:,8], y, label="Humidity")
+plt.scatter(Shanghai.iloc[:,13], y, label = "Precipitation")
+
+plt.xlabel("Scale")
+plt.ylabel("Particulate Matter")
+plt.legend()
+
+#number of iterations for loop, 1000 length monte-carlo
+iter = 1000
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(iter)
+rsq_score_test = np.zeros(iter)
+
+#Monte carlo of linear regression 
+for i in range(iter):
+    # split data with half the data in the training and testing part
+    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5) 
+    # Linear Regression Model
+    lr = LinearRegression().fit(X_train,y_train)
+    # For each run store the classification accuracy (score) on the test and training sets.
+    rsq_score_test[i] = lr.score(X_test, y_test)
+    rsq_score_train[i] = lr.score(X_train, y_train)
+mean_score_train = np.mean(rsq_score_train)
+mean_score_test = np.mean(rsq_score_test)
+
+# Print the accuracy results
+print("Train Mean:", round(mean_score_train,4))
+print("Test Mean:", round(mean_score_test,4))
+
+#create an empty dictionary to store model and mean test score
+dict_score = {}
+linear_score=round(np.mean(rsq_score_test),4)
+dict_score.update({'Linear Regression': linear_score})
+print(dict_score)
+
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(iter)
+rsq_score_test = np.zeros(iter)
+alphas = [.01, .1, 1, 10, 30, 50, 70, 80, 100]
+mean_score_train = np.zeros(9)
+mean_score_test = np.zeros(9)
+
+#Monte carlo of Ridge regression 
+for index, alpha in enumerate(alphas):
+    #create matrix of ridge regression results on training and test data
+    for i in range(iter):
+        # split data with half the data in the training and testing part
+        X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5) 
+        # Ridge Regression Model
+        ridge_reg = Ridge(alpha= alpha).fit(X_train, y_train)
+        # For each run store the classification accuracy (score) on the test and training sets.
+        rsq_score_test[i] = ridge_reg.score(X_test, y_test)
+        rsq_score_train[i] = ridge_reg.score(X_train, y_train)
+  
+    #For this range of alpha, estimate the mean test set score 
+    mean_score_train[index] = np.mean(rsq_score_train)
+    mean_score_test[index] = np.mean(rsq_score_test)
+
+# Print the accuracy results
+print("Train Mean:", round(np.mean(rsq_score_train),4))
+print("Test Mean:", round(np.mean(rsq_score_test),4))
+plt.title("Accuracy of training vs validation sets for Ridge Regression")
+plt.plot(alphas, mean_score_train, label = "Training Score Accuracy")
+plt.plot(alphas, mean_score_test, label = "Validation Score Accuracy")
+plt.xlabel("Alpha Level")
+plt.ylabel("Accuracy")
+plt.legend()
+
+#add to score dictionary
+ridge_score=round(np.mean(rsq_score_test),4)
+dict_score.update({'Ridge Regression': ridge_score})
+print(dict_score)
+
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(iter)
+rsq_score_test = np.zeros(iter)
+alphas = [.000001, .0001, .001, .01, 1]
+mean_score_train = np.zeros(5)
+mean_score_test = np.zeros(5)
+
+#Monte carlo of Lasso regression 
+for index, alpha in enumerate(alphas):
+    #create matrix of lasso regression results on training and test data
+    for i in range(iter):
+        # split data with half the data in the training and testing part
+        X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5) 
+        # Lasso Regression Model
+        lasso_reg = Lasso(alpha= alpha, max_iter=100).fit(X_train, y_train)
+        # For each run store the classification accuracy (score) on the test and training sets.
+        rsq_score_test[i] = lasso_reg.score(X_test, y_test)
+        rsq_score_train[i] = lasso_reg.score(X_train, y_train)
+           
+    #For this range of alpha, estimate the mean test set score 
+    mean_score_train[index] = np.mean(rsq_score_train)
+    mean_score_test[index] = np.mean(rsq_score_test)
+
+# Print the accuracy results
+print("Train Mean:", round(np.mean(rsq_score_train),4))
+print("Test Mean:", round(np.mean(rsq_score_test),4))
+plt.title("Accuracy of training vs validation sets for Lasso Regression")
+plt.plot(alphas, mean_score_train, label = "Training Score Accuracy")
+plt.plot(alphas, mean_score_test, label = "Validation Score Accuracy")
+plt.xlabel("Alpha Level")
+plt.ylabel("Accuracy")
+plt.legend()
+
+#add to score dictionary
+lasso_score=round(np.mean(rsq_score_test),4)
+dict_score.update({'Lasso Regression': lasso_score})
+print(dict_score)
+
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(iter)
+rsq_score_test = np.zeros(iter)
+neighbor_settings = [1, 3, 5, 7, 9]
+mean_score_train = np.zeros(5)
+mean_score_test = np.zeros(5)
+
+#Monte carlo of KNN regression 
+for index, k in enumerate(neighbor_settings):
+    #create matrix of lasso regression results on training and test data
+    for i in range(iter):
+        # split data with half the data in the training and testing part
+        X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5) 
+        # KNN Model
+        knear_reg = KNeighborsRegressor(n_neighbors= k).fit(X_train, y_train)
+        # For each run store the classification accuracy (score) on the test and training sets.
+        rsq_score_test[i] = knear_reg.score(X_test, y_test)
+        rsq_score_train[i] = knear_reg.score(X_train, y_train)
+           
+    #For this range of alpha, estimate the mean test set score 
+    mean_score_train[index] = np.mean(rsq_score_train)
+    mean_score_test[index] = np.mean(rsq_score_test)
+    
+    
+# Print the accuracy results
+print("Train Mean:", round(np.mean(rsq_score_train),4))
+print("Test Mean:", round(np.mean(rsq_score_test),4))
+plt.title("Accuracy of training vs validation sets for KNeighborsRegressor")
+plt.plot(neighbor_settings, mean_score_train, label = "Training Score Accuracy")
+plt.plot(neighbor_settings, mean_score_test, label = "Validation Score Accuracy")
+plt.xlabel("# of neightbors")
+plt.ylabel("Accuracy")
+plt.legend()
+
+#add to score dictionary
+knn_score=round(np.mean(rsq_score_test),4)
+dict_score.update({'KNN': knn_score})
+print(dict_score)
+
+# load data set
+Shanghai = pd.read_csv("Shanghai.csv")
+#This is our target variable 
+y = Shanghai.iloc[:,1]
+# These are the predictors 
+X= Shanghai.iloc[:, 2:15]
+
+#create dummies for categorical variable 
+dummies = pd.get_dummies(X.iloc[:,9])
+#Join the dummies the preditors 
+X = X.join(dummies)
+#drop the categorical variable 
+X = X.drop(['cbwd'],1)
+
+# Randon Forest Regression 
+tree_reg = RandomForestRegressor(n_estimators=75,max_features=17,max_depth=10)
+cvf = ShuffleSplit(n_splits=50, test_size=0.5)
+scores = cross_val_score(tree_reg, X, y, cv=cvf)
+#print(scores)
+print("Mean Test Score", np.mean(scores))
+
+N_splits = range(1,51,1)
+plt.title("Accuracy of Cross Validation Randon Forest Regression")
+plt.plot(N_splits, scores, label = "Validation CV Score Accuracy")
+plt.xlabel("N_Splits")
+plt.ylabel("Accuracy")
+plt.legend()
+
+#add to score dictionary
+randforest_score=round(np.mean(scores),4)
+dict_score.update({'Random Forest': randforest_score)
+print("Dictionary of Model Accuracy")
+print(dict_score)
+
+tree_reg = RandomForestRegressor(n_estimators=75,max_features=15,max_depth=10).fit(X, y)
+def plot_feature_importances_air(model):
+    n_features = X.shape[1]
+    plt.barh(range(n_features), model.feature_importances_, align='center')
+    plt.yticks(np.arange(n_features), X.columns)
+    plt.xlabel("Feature importance")
+    plt.ylabel("Feature")
+    plt.ylim(-1, n_features)
+
+plot_feature_importances_air(tree_reg)
+print("Feature importances:\n{}".format(tree_reg.feature_importances_))
+
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(5)
+rsq_score_test = np.zeros(5)
+mean_score_train = np.zeros(3)
+mean_score_test = np.zeros(3)
+gamma = [.01, .1, 1.]
+
+#Monte carlo of Kernal ridge regression 
+for index, g in enumerate(gamma):
+    # split data with half the data in the training and testing part
+    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5) 
+    # Gaussian Kernal Ridge Regression Model
+    k_ridge = KernelRidge(alpha=1., kernel='rbf',gamma=g).fit(X_train, y_train)
+    # For each run store the classification accuracy (score) on the test and training sets.
+    rsq_score_test[i] = knear_reg.score(X_test, y_test)
+    rsq_score_train[i] = knear_reg.score(X_train, y_train)
+
+    
+# Print the accuracy results
+#print("Training Results:" + str(rsq_score_train))
+print("Train Mean:", round(mean_score_train,4))
+print("     ")
+#print("Test Results:" + str(rsq_score_test))
+print("Test Mean:", round(mean_score_test,4))
+print("     ")
+
+plt.title("Accuracy of training vs validation sets for Gaussian Kernel Ridge Regression")
+plt.plot(gamma, mean_score_train, label = "Training Score Accuracy")
+plt.plot(gamma, mean_score_test, label = "Validation Score Accuracy")
+plt.xlabel("Alpha level")
+plt.ylabel("Accuracy")
+plt.legend
+
+#add to score dictionary
+kernal_score=round(np.mean(rsq_score_test),4)
+kernal_prob=np.mean(rsq_score_test>yGuess)
+dict_score.update({'Gaussian Kernal': [kernal_score, kernal_prob]})
+print(dict_score)
+
+#generates a vector of zeroes 
+rsq_score_train = np.zeros(iter)
+rsq_score_test = np.zeros(iter)
+mean_score_train = np.zeros(3)
+mean_score_test = np.zeros(3)
+alpha = [.01, .1, 1.]
+    
+#Monte carlo of Poly Kernal ridge regression 
+for index, a in enumerate(alpha):
+    #create matrix of lasso regression results on training and test data
+    for i in range(iter):
+       # split data with half the data in the training and testing part
+        X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.5)         
+        # Polynomial Kernal Regression Model
+        k_ridge = KernelRidge(alpha=a,kernel='poly',gamma=1.0).fit(X_train, y_train)
+        # For each run store the classification accuracy (score) on the test and training sets.
+        rsq_score_test[i] = knear_reg.score(X_test, y_test)
+        rsq_score_train[i] = knear_reg.score(X_train, y_train)
+
+    #For this range of alpha, estimate the mean test set score 
+    mean_score_train[index] = np.mean(rsq_score_train)
+    mean_score_test[index] = np.mean(rsq_score_test)  
+    
+# Print the accuracy results
+#print("Training Results:" + str(rsq_score_train))
+print("Train Mean:", round(mean_score_train,4))
+print("     ")
+#print("Test Results:" + str(rsq_score_test))
+print("Test Mean:", round(mean_score_test,4))
+print("     ")
+plt.title("Accuracy of training vs validation sets for Polynomial Kernel Ridge Regression")
+plt.plot(alpha, mean_score_train, label = "Training Score Accuracy")
+plt.plot(alpha, mean_score_test, label = "Validation Score Accuracy")
+plt.xlabel("# of neightbors")
+plt.ylabel("Accuracy")
+plt.legend()
+
+kernal_score=round(np.mean(rsq_score_test),4)
+kernal_prob=np.mean(rsq_score_test>yGuess)
+dict_score.update({'Polynomial Kernal': [kernal_score, kernal_prob]})
+print(dict_score)
